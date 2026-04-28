@@ -25,3 +25,5 @@ where = ["src"]
 [tool.setuptools.package-data]
 # This ensures the model weights and TSV files are packed into the pip wheel
 "pick_a_pka.models.pkalearn" = ["*.pt", "*.pth", "*.pkl", "*.json"]
+"pick_a_pka.models.molgpka" = ["*.pth", "*.pt"]
+"pick_a_pka.molgpka.utils" = ["*.tsv"]
