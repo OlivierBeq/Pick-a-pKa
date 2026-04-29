@@ -1,2 +1,4 @@
+from .new_molgpka.model import MolGpKaModel
 from .draw import draw_pka, plot_microspecies_distribution
-from .predict_pka import predict as predict_pka, calculate_microspecies_abundances
+
+__all__ = ["MolGpKaModel", "draw_pka", "plot_microspecies_distribution"]

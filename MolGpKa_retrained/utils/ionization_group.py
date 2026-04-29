@@ -72,7 +72,7 @@ def get_ionization_aid(mol, acid_or_base=None):
     df_smarts_acid, df_smarts_base = split_acid_base_pattern(smarts_file)
 
     if mol == None:
-        raise RuntimeError("read mol error: {}".format(mol_file))
+        raise RuntimeError("read mol error")
     acid_matches = match_acid(df_smarts_acid, mol)
     base_matches = match_base(df_smarts_base, mol)
     if acid_or_base == None:

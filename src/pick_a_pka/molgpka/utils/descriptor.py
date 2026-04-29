@@ -65,7 +65,7 @@ def get_atom_features(mol, aid):
                                                Chem.rdchem.HybridizationType.SP3,
                                                Chem.rdchem.HybridizationType.SP3D,
                                                Chem.rdchem.HybridizationType.SP3D2])
-        o += [atom.GetImplicitValence()]
+        o += [atom.GetValence(Chem.ValenceType.IMPLICIT)()]
         o += [atom.GetIsAromatic()]
         o += [ring.IsAtomInRingOfSize(atom_idx, 3),
               ring.IsAtomInRingOfSize(atom_idx, 4),
