@@ -1,8 +1,8 @@
 from typing import Literal
 from rdkit import Chem
 
-from .new_molgpka.model import MolGpKaModel
-from .new_pkalearn.model import PkaLearnModel
+from .molgpka.model import MolGpKaModel
+from .pkalearn.model import PkaLearnModel
 
 
 class PKaPredictor:
