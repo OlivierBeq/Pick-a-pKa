@@ -1,11 +1,13 @@
 import copy
+import math
 
+import numpy as np
 from rdkit import Chem
 
 from .change_ionization import parse_smiles, find_centers, addHs, ionizeN
 from .featurizer import mol_to_graph
 from .inference import predict_single
-from ...types import LadderStep, MicrostateResult
+from ...types import LadderStep, MicrostateResult, StateDistribution
 
 
 class DummyArgs:
@@ -174,20 +176,55 @@ def predict_ladder(model_wrapper, original_smiles, config, allow_amphoteric=Fals
     return all_results
 
 
-def compute_microstates_at_ph(model_wrapper, mol, pH, config, allow_amphoteric=False) -> MicrostateResult:
-    ladder = predict_ladder(model_wrapper, Chem.MolToSmiles(mol, canonical=False), config, allow_amphoteric)
-    if not ladder: return MicrostateResult(major_state=mol, pka=None, ladder=[])
+def compute_microstates(model_wrapper, mol, ph=7.4, ph_range=None, ph_step=None) -> MicrostateResult | dict[
+    float, MicrostateResult]:
+    original_smiles = Chem.MolToSmiles(mol, canonical=False)
+    ladder = predict_ladder(model_wrapper, original_smiles, config=model_wrapper.config,
+                            allow_amphoteric=model_wrapper.allow_amphoteric
+                            )
 
-    # Simple threshold filter: take the last state where pKa > pH
-    dominant = ladder[0]
-    for step in ladder:
-        if step["pka"] >= pH:
-            dominant = step
-        else:
-            break
+    states = [mol] + [Chem.MolFromSmiles(step["smiles"]) for step in ladder]
+    all_pkas = sorted([step["pka"] for step in ladder])
 
+    def get_dist_at_ph(current_ph):
+        if not all_pkas:
+            dist = [StateDistribution(smiles=Chem.MolToSmiles(mol), mol=mol, abundance=100.0)]
+            return dist
+
+        log_ratios = [0.0]
+        current_sum_pka = 0.0
+        for k in range(1, len(all_pkas) + 1):
+            current_sum_pka += all_pkas[k - 1]
+            log_ratios.append(k * current_ph - current_sum_pka)
+
+        max_log = max(log_ratios)
+        ratios = [10 ** (lr - max_log) for lr in log_ratios]
+        total_ratio = sum(ratios)
+        fractions = [(r / total_ratio) * 100.0 for r in ratios]
+
+        dist = []
+        for frac, state_mol in zip(fractions, states):
+            dist.append(StateDistribution(smiles=Chem.MolToSmiles(state_mol), mol=state_mol, abundance=frac))
+        dist.sort(key=lambda x: x["abundance"], reverse=True)
+        return dist
+
+    if ph_range is not None:
+        if ph_step is None:
+            raise ValueError("`ph_step` must be specified when using `ph_range`.")
+        results = {}
+        for current_ph in np.arange(ph_range[0], ph_range[1] + (ph_step / 2), ph_step):
+            rounded_ph = round(current_ph, max(0, int(math.ceil(-math.log10(ph_step)))))
+            dist = get_dist_at_ph(rounded_ph)
+            results[rounded_ph] = MicrostateResult(
+                major_state=dist[0]["mol"],
+                major_abundance=dist[0]["abundance"],
+                distribution=dist
+            )
+        return results
+
+    dist = get_dist_at_ph(ph)
     return MicrostateResult(
-        major_state=Chem.MolFromSmiles(dominant["smiles"]),
-        pka=dominant["pka"],
-        ladder=ladder
+        major_state=dist[0]["mol"],
+        major_abundance=dist[0]["abundance"],
+        distribution=dist
     )

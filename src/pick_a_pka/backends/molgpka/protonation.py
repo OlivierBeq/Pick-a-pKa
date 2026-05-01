@@ -5,7 +5,7 @@ from itertools import combinations
 import numpy as np
 from rdkit import Chem
 
-from ...types import MicrostateResult
+from ...types import MicrostateResult, StateDistribution
 
 
 def _generate_microspecies_sequence(mol_no_hs, base_pka_dict, acid_pka_dict):
@@ -94,21 +94,36 @@ def calculate_microspecies_abundances(model, mol, ph=None, ph_range=None, ph_ste
         return results_over_range
 
 
-def compute_microstates(model, mol, ph, ph_range, ph_step):
+def compute_microstates(model, mol, ph=7.4, ph_range=None, ph_step=None) -> MicrostateResult | dict[
+    float, MicrostateResult]:
     """Wrapper for calculating dominant states at a given pH."""
-    abundances = calculate_microspecies_abundances(model, mol, ph=ph, ph_range=ph_range, ph_step=ph_step)
-    major_state = max(abundances.items(), key=lambda x: x[0])[1]
-
+    raw_results = calculate_microspecies_abundances(model, mol, ph=ph, ph_range=ph_range, ph_step=ph_step)
     if ph_range is not None:
         results = {}
-        for current_ph, abundances in abundances.items():
-            results[current_ph] = MicrostateResult(major_state=major_state, pka=None, ladder=abundances)
-        return results
+        for current_ph, abundances in raw_results.items():
+            dist = []
+            for frac, state_mol in abundances.items():
+                dist.append(
+                    StateDistribution(smiles=Chem.MolToSmiles(state_mol), mol=state_mol, abundance=frac)
+                )
+            dist.sort(key=lambda x: x["abundance"], reverse=True)
+            major = dist[0]
+            results[current_ph] = MicrostateResult(
+                major_state=major["mol"],
+                major_abundance=major["abundance"],
+                distribution=dist
+            )
+            return results
 
+    dist = []
+    for frac, state_mol in raw_results.items():
+        dist.append(StateDistribution(smiles=Chem.MolToSmiles(state_mol), mol=state_mol, abundance=frac))
+    dist.sort(key=lambda x: x["abundance"], reverse=True)
+    major = dist[0]
     return MicrostateResult(
-        major_state=major_state,
-        pka=None,
-        ladder=abundances,
+        major_state=major["mol"],
+        major_abundance=major["abundance"],
+        distribution=dist
     )
 
 

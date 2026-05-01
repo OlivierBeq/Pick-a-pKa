@@ -15,7 +15,14 @@ class LadderStep(TypedDict):
     pka: float
 
 
+class StateDistribution(TypedDict):
+    smiles: str
+    mol: Chem.Mol
+    abundance: float
+
+
+
 class MicrostateResult(TypedDict):
     major_state: Chem.Mol
-    pka: float | None
-    ladder: List[LadderStep] | Dict[str, Any]
+    major_abundance: float
+    distribution: list[StateDistribution]

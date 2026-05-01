@@ -110,6 +110,6 @@ class PkaLearnModel(BasePKaModel):
             "mol": mol_clean
         }
 
-    def predict_microstates(self, mol, pH=7.4, **kwargs):
-        from .microstates import compute_microstates_at_ph
-        return compute_microstates_at_ph(self, mol, pH, self.config, self.allow_amphoteric)
+    def predict_microstates(self, mol, ph=7.4, ph_range=None, ph_step=None):
+        from .microstates import compute_microstates
+        return compute_microstates(self, mol, ph=ph, ph_range=ph_range, ph_step=ph_step)
