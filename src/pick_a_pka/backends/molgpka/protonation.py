@@ -55,7 +55,7 @@ def calculate_microspecies_abundances(model, mol, ph=None, ph_range=None, ph_ste
     if ph_range is not None and ph_step is None:
         raise ValueError("`ph_step` must be specified when using `ph_range`.")
 
-    pred = model.predict(mol, uncharged=True)
+    pred = model.predict_pka(mol, uncharged=True)
     base_pka_dict, acid_pka_dict, mol_no_hs = pred["base_pka"], pred["acid_pka"], pred["mol"]
     microspecies = _generate_microspecies_sequence(mol_no_hs, base_pka_dict, acid_pka_dict)
 
@@ -190,7 +190,7 @@ def protonate_mol(model, smi, ph, tph):
     Given a SMILES string, a pH, and a threshold (tph), yields SMILES strings for dominant protonation states.
     """
     omol = Chem.MolFromSmiles(smi)
-    pred = model.predict(omol, uncharged=True)
+    pred = model.predict_pka(omol, uncharged=True)
     mc = modify_mol(pred["mol"], pred["acid_pka"], pred["base_pka"])
 
     stable_data, unstable_data = get_pKa_data(mc, ph, tph)

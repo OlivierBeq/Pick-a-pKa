@@ -24,7 +24,7 @@ def draw_pka(mol: Chem.Mol, model: MolGpKaModel = None, uncharged: bool = True, 
 
     mol_copy = Chem.Mol(mol)
 
-    pred = model.predict(mol_copy, uncharged=uncharged)
+    pred = model.predict_pka(mol_copy, uncharged=uncharged)
     base_pka, acid_pka, mol_copy = pred["base_pka"], pred["acid_pka"], pred["mol"]
 
     rdDepictor.SetPreferCoordGen(False)
@@ -192,7 +192,7 @@ def plot_microspecies_distribution(mol: Chem.Mol, model: MolGpKaModel = None, ve
         model = MolGpKaModel()
 
     abundance_data = calculate_microspecies_abundances(model, mol, ph_range=(0, 14), ph_step=0.05)
-    pred = model.predict(mol, uncharged=True)
+    pred = model.predict_pka(mol, uncharged=True)
     base_pka_dict, acid_pka_dict = pred["base_pka"], pred["acid_pka"]
 
     X_pH = sorted(abundance_data.keys())
