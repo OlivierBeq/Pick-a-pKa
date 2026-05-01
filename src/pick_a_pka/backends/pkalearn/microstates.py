@@ -5,6 +5,7 @@ from rdkit import Chem
 from .change_ionization import parse_smiles, find_centers, addHs, ionizeN
 from .featurizer import mol_to_graph
 from .inference import predict_single
+from ...types import LadderStep, MicrostateResult
 
 
 class DummyArgs:
@@ -136,11 +137,11 @@ def predict_ladder(model_wrapper, original_smiles, config):
         # Take the highest pKa (the one that stays protonated longest)
         best_idx = predicts.index(max(predicts))
 
-        all_results.append({
-            "smiles": smis[best_idx],
-            "center": centers[best_idx],
-            "pka": predicts[best_idx]
-        }
+        all_results.append(LadderStep(
+            smiles=smis[best_idx],
+            center=centers[best_idx],
+            pka=predicts[best_idx]
+        )
         )
 
         # Prepare for next round
@@ -154,7 +155,7 @@ def predict_ladder(model_wrapper, original_smiles, config):
 
 def compute_microstates_at_ph(model_wrapper, mol, pH, config):
     ladder = predict_ladder(model_wrapper, Chem.MolToSmiles(mol, canonical=False), config)
-    if not ladder: return {"major_state": mol, "pka": None, "ladder": []}
+    if not ladder: return MicrostateResult(major_state=mol, pka=None, ladder=[])
 
     # Simple threshold filter: take the last state where pKa > pH
     dominant = ladder[0]
@@ -164,8 +165,8 @@ def compute_microstates_at_ph(model_wrapper, mol, pH, config):
         else:
             break
 
-    return {
-        "major_state": Chem.MolFromSmiles(dominant["smiles"]),
-        "pka": dominant["pka"],
-        "ladder": ladder
-    }
+    return MicrostateResult(
+        major_state=Chem.MolFromSmiles(dominant["smiles"]),
+        pka=dominant["pka"],
+        ladder=ladder
+    )

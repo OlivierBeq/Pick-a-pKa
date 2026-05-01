@@ -5,6 +5,8 @@ from itertools import combinations
 import numpy as np
 from rdkit import Chem
 
+from ...types import MicrostateResult
+
 
 def _generate_microspecies_sequence(mol_no_hs, base_pka_dict, acid_pka_dict):
     """Generate a list of RDKit molecules representing sequential deprotonation states."""
@@ -96,10 +98,18 @@ def compute_microstates(model, mol, pH):
     """Wrapper for calculating dominant states at a given pH."""
     abundances = calculate_microspecies_abundances(model, mol, ph=pH)
     major_state = max(abundances.items(), key=lambda x: x[0])[1]
-    return {
-        "states": abundances,
-        "major_state": major_state
-    }
+
+    if ph_range is not None:
+        results = {}
+        for current_ph, abundances in abundances.items():
+            results[current_ph] = MicrostateResult(major_state=major_state, pka=None, ladder=abundances)
+        return results
+
+    return MicrostateResult(
+        major_state=major_state,
+        pka=None,
+        ladder=abundances,
+    )
 
 
 def modify_mol(mol_no_hs, acid_dict, base_dict):

@@ -9,6 +9,7 @@ from pick_a_pka.core.base import BasePKaModel
 from .featurizer import mol_to_graph, get_ionization_aid
 from .network import MolGpKaNet
 from .protonation import compute_microstates
+from ...exceptions import ResourceNotFoundError
 
 
 class MolGpKaModel(BasePKaModel):
@@ -21,12 +22,15 @@ class MolGpKaModel(BasePKaModel):
 
     def _load_model(self, pkg, filename):
         model = MolGpKaNet()
-        with resources.as_file(resources.files(pkg).joinpath(filename)) as path:
-            state = torch.load(path, map_location=self.device, weights_only=True)
-        model.load_state_dict(state)
-        model.to(self.device)
-        model.eval()
-        return model
+        try:
+            with resources.as_file(resources.files(pkg).joinpath(filename)) as path:
+                state = torch.load(path, map_location=self.device, weights_only=True)
+            model.load_state_dict(state)
+            model.to(self.device)
+            model.eval()
+            return model
+        except Exception as e:
+            raise ResourceNotFoundError(f"Could not load MolGpKa model weights ({filename}): {e}")
 
     @torch.no_grad()
     def predict_pka(self, mol, uncharged=True):

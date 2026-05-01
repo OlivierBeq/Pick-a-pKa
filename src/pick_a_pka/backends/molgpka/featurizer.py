@@ -7,6 +7,8 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from torch_geometric.data import Data
 
+from ...exceptions import InvalidMoleculeError
+
 
 def one_hot(x, allowable_set):
     if x not in allowable_set:
@@ -143,7 +145,7 @@ def match_base(df_smarts_base, mol):
 
 def get_ionization_aid(mol, acid_or_base=None):
     if mol is None:
-        raise RuntimeError("Invalid RDKit molecule")
+        raise InvalidMoleculeError("Invalid RDKit molecule")
 
     df_smarts_acid, df_smarts_base = split_acid_base_pattern()
     acid_matches = match_acid(df_smarts_acid, mol)
