@@ -202,7 +202,7 @@ def from_acid_to_base(mol, center):
     smile_base = "none"
     if base_found:
         Chem.SanitizeMol(mol, catchErrors=True)
-        smile_base = Chem.MolToSmiles(mol)
+        smile_base = Chem.MolToSmiles(mol, canonical=False)
     return base_found, mol, smile_base
 
 
