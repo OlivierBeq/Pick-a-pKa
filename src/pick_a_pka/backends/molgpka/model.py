@@ -77,9 +77,9 @@ class MolGpKaModel(BasePKaModel):
             base_res[aid] = out.item()
         return base_res
 
-    def predict_microstates(self, mol, pH=7.4):
+    def predict_microstates(self, mol, ph=7.4, ph_range=None, ph_step=None):
         """Returns major protonation state and distribution at a given pH."""
-        return compute_microstates(self, mol, pH)
+        return compute_microstates(self, mol, ph=ph, ph_range=ph_range, ph_step=ph_step)
 
     def _remap_pka_without_hs(self, mol_with_hs, base_pka_dict, acid_pka_dict):
         """

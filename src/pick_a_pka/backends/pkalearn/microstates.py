@@ -35,7 +35,7 @@ def _clean_smiles(smiles):
     return smiles
 
 
-def _infer_round(model_wrapper, smiles, initial, ionization_states_in, config):
+def _infer_round(model_wrapper, smiles, initial, ionization_states_in, config, allow_amphoteric=False):
     dummy_args = DummyArgs()
 
     if initial:
@@ -96,6 +96,7 @@ def _infer_round(model_wrapper, smiles, initial, ionization_states_in, config):
     j, atom_idx = -1, 0
     smiles_A = smiles
 
+    # Standard hard-filtered evaluation
     while j < len(smiles_A):
         st = [copy.deepcopy(x) for x in ionization_states0]
         if j < 0: j = 0
@@ -120,10 +121,28 @@ def _infer_round(model_wrapper, smiles, initial, ionization_states_in, config):
             centers.append(center)
             ion_states_list.append(st)
 
+    # Force-evaluate all remaining protons on heavy atoms
+    if allow_amphoteric and mol_original:
+        from .featurizer import from_acid_to_base
+        for idx, atom in enumerate(mol_original.GetAtoms()):
+            # Only evaluate if the atom wasn't already caught by parse_smiles,
+            # AND it actually has a proton to lose.
+            if idx not in centers and atom.GetTotalNumHs() > 0 and atom.GetSymbol() in ['N', 'O', 'S', 'P']:
+                b_found, mol_B, smi_B = from_acid_to_base(copy.deepcopy(mol_original), idx)
+                if b_found and smi_B != "none":
+                    data = mol_to_graph(mol_original, idx, config)
+                    if data is not None:
+                        pred = predict_single(model_wrapper.model, data, model_wrapper.device)
+                        predicts.append(pred)
+                        inf_smiles_list.append(smi_B)
+                        centers.append(idx)
+                        # We copy the last state so `parse_smiles` on the next round doesn't crash
+                        ion_states_list.append(copy.deepcopy(ionization_states0))
+
     return predicts, inf_smiles_list, centers, ion_states_list
 
 
-def predict_ladder(model_wrapper, original_smiles, config):
+def predict_ladder(model_wrapper, original_smiles, config, allow_amphoteric=False) -> list[LadderStep]:
     """Iterative macroscopic deprotonation sequence."""
     all_results = []
     initial = True
@@ -131,7 +150,9 @@ def predict_ladder(model_wrapper, original_smiles, config):
     curr_ion_states = []
 
     while True:
-        predicts, smis, centers, states = _infer_round(model_wrapper, curr_smiles, initial, curr_ion_states, config)
+        predicts, smis, centers, states = _infer_round(
+            model_wrapper, curr_smiles, initial, curr_ion_states, config, allow_amphoteric
+        )
         if not predicts: break
 
         # Take the highest pKa (the one that stays protonated longest)
@@ -153,8 +174,8 @@ def predict_ladder(model_wrapper, original_smiles, config):
     return all_results
 
 
-def compute_microstates_at_ph(model_wrapper, mol, pH, config):
-    ladder = predict_ladder(model_wrapper, Chem.MolToSmiles(mol, canonical=False), config)
+def compute_microstates_at_ph(model_wrapper, mol, pH, config, allow_amphoteric=False) -> MicrostateResult:
+    ladder = predict_ladder(model_wrapper, Chem.MolToSmiles(mol, canonical=False), config, allow_amphoteric)
     if not ladder: return MicrostateResult(major_state=mol, pka=None, ladder=[])
 
     # Simple threshold filter: take the last state where pKa > pH

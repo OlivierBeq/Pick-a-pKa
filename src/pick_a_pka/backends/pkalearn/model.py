@@ -5,6 +5,7 @@ from rdkit import Chem
 
 from .network import PkaLearnGNN
 from ...core.base import BasePKaModel
+from ...exceptions import ResourceNotFoundError
 
 
 class PkaLearnModel(BasePKaModel):
@@ -34,9 +35,10 @@ class PkaLearnModel(BasePKaModel):
         'model_attention_heads': 4
     }
 
-    def __init__(self, device="cpu", config=None):
+    def __init__(self, device="cpu", config=None, allow_amphoteric: bool = False):
         super().__init__(device=device)
         self.config = config or self.DEFAULT_CONFIG
+        self.allow_amphoteric = allow_amphoteric
         self.model = PkaLearnGNN(feature_size=19, edge_dim=7, model_params=self.config)
         self._load_weights()
         self.model.to(self.device)
@@ -44,10 +46,13 @@ class PkaLearnModel(BasePKaModel):
 
     def _load_weights(self):
         pkg = "pick_a_pka.backends.pkalearn.resources"
-        with resources.as_file(resources.files(pkg).joinpath("train_AAc-1_best.pth")) as path:
-            ckpt = torch.load(path, map_location=self.device, weights_only=True)
-        state_dict = ckpt["model_state_dict"] if "model_state_dict" in ckpt else ckpt
-        self.model.load_state_dict(state_dict)
+        try:
+            with resources.as_file(resources.files(pkg).joinpath("train_AAc-1_best.pth")) as path:
+                ckpt = torch.load(path, map_location=self.device, weights_only=True)
+            state_dict = ckpt["model_state_dict"] if "model_state_dict" in ckpt else ckpt
+            self.model.load_state_dict(state_dict)
+        except Exception as e:
+            raise ResourceNotFoundError(f"Cound not load pKaLearn model weights: {e}")
 
     @torch.no_grad()
     def predict(self, mol_or_smiles):
@@ -82,12 +87,12 @@ class PkaLearnModel(BasePKaModel):
             step_mol = Chem.MolFromSmiles(step['smiles'], sanitize=False)
 
             if step_mol and step_mol.GetNumAtoms() == mol_clean.GetNumAtoms():
-                # Get the formal charge of the target atom in the deprotonated state
+                # Get the formal charge of the target atom in the protonated state
                 fc = step_mol.GetAtomWithIdx(idx).GetFormalCharge()
 
                 # An acid loses a proton from its neutral state to become anionic (< 0).
                 # A base loses a proton from its cationic state to become neutral/less positive (>= 0).
-                if fc < 0:
+                if fc <= 0:
                     acid_pka[idx] = pka
                 else:
                     base_pka[idx] = pka
@@ -105,6 +110,6 @@ class PkaLearnModel(BasePKaModel):
             "mol": mol_clean
         }
 
-    def predict_microstates(self, mol, pH=7.4):
+    def predict_microstates(self, mol, pH=7.4, **kwargs):
         from .microstates import compute_microstates_at_ph
-        return compute_microstates_at_ph(self, mol, pH, self.config)
+        return compute_microstates_at_ph(self, mol, pH, self.config, self.allow_amphoteric)

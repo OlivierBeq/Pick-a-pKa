@@ -94,9 +94,9 @@ def calculate_microspecies_abundances(model, mol, ph=None, ph_range=None, ph_ste
         return results_over_range
 
 
-def compute_microstates(model, mol, pH):
+def compute_microstates(model, mol, ph, ph_range, ph_step):
     """Wrapper for calculating dominant states at a given pH."""
-    abundances = calculate_microspecies_abundances(model, mol, ph=pH)
+    abundances = calculate_microspecies_abundances(model, mol, ph=ph, ph_range=ph_range, ph_step=ph_step)
     major_state = max(abundances.items(), key=lambda x: x[0])[1]
 
     if ph_range is not None:

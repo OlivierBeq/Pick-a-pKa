@@ -13,6 +13,7 @@ class PKaPredictor:
             self,
             model: Literal["pkalearn", "molgpka"] | BackendType = BackendType.PKALEARN,
             device: str = "cpu",
+            allow_amphoteric: bool = False,
     ):
         try:
             self.model_name = BackendType(model)
@@ -21,10 +22,12 @@ class PKaPredictor:
                 f"Unknown backend: '{model}'. Choose from: {[b.value for b in BackendType]}"
             )
         self.device = device
+        self.allow_amphoteric = allow_amphoteric
         if self.model_name == BackendType.MOLGPKA:
             self.model = MolGpKaModel(device=self.device)
         elif self.model_name == BackendType.PKALEARN:
             self.model = PkaLearnModel(device=self.device,
+                                       allow_amphoteric=self.allow_amphoteric
                                        )
 
     def __del__(self):
@@ -72,7 +75,7 @@ class PKaPredictor:
         """
         mols = self._to_mol(mol)
         results = [
-            self.model.predict_microstates(mol_, pH=ph, ph_range=ph_range, ph_step=ph_step)
+            self.model.predict_microstates(mol_, ph=ph, ph_range=ph_range, ph_step=ph_step)
             for mol_ in mols
         ]
         return results
