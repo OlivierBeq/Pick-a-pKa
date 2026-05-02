@@ -98,6 +98,10 @@ def _infer_round(model_wrapper, smiles, initial, ionization_states_in, config, a
     j, atom_idx = -1, 0
     smiles_A = smiles
 
+    # We track what has been evaluated *in this round only* to avoid duplicate graph passes.
+    # An atom can be evaluated again in a future round if it still has protons to lose.
+    evaluated_in_round = set()
+
     # Standard hard-filtered evaluation
     while j < len(smiles_A):
         st = [copy.deepcopy(x) for x in ionization_states0]
@@ -109,12 +113,15 @@ def _infer_round(model_wrapper, smiles, initial, ionization_states_in, config, a
         )
 
         if is_smiles:
+            center = atom_idx - 1
+            if center in evaluated_in_round:
+                continue
+
             mol_obj_A = Chem.MolFromSmiles(smiles_A, sanitize=False)
             if not mol_obj_A: continue
             Chem.rdmolops.RemoveHs(mol_obj_A, sanitize=False)
             Chem.SanitizeMol(mol_obj_A, catchErrors=True)
 
-            center = atom_idx - 1
             data = mol_to_graph(mol_obj_A, center, config)
             if data is None: continue
 
@@ -122,15 +129,21 @@ def _infer_round(model_wrapper, smiles, initial, ionization_states_in, config, a
             inf_smiles_list.append(smiles_A)
             centers.append(center)
             ion_states_list.append(st)
+            evaluated_in_round.add(center)
 
-    # Force-evaluate all remaining protons on heavy atoms
+    # Force-evaluate all remaining protons on heteroatoms
     if allow_amphoteric and mol_original:
         from .featurizer import from_acid_to_base
+
         for idx, atom in enumerate(mol_original.GetAtoms()):
-            # Only evaluate if the atom wasn't already caught by parse_smiles,
-            # AND it actually has a proton to lose.
-            if idx not in centers and atom.GetTotalNumHs() > 0 and atom.GetSymbol() in ['N', 'O', 'S', 'P']:
-                b_found, mol_B, smi_B = from_acid_to_base(copy.deepcopy(mol_original), idx)
+            if idx in evaluated_in_round:
+                continue
+
+            # If it has a proton, try taking it off
+            if atom.GetTotalNumHs() > 0 and atom.GetSymbol() in ['N', 'O', 'S', 'P']:
+                mol_A_copy = copy.deepcopy(mol_original)
+                b_found, _, smi_B = from_acid_to_base(mol_A_copy, idx)
+
                 if b_found and smi_B != "none":
                     data = mol_to_graph(mol_original, idx, config)
                     if data is not None:
@@ -138,8 +151,8 @@ def _infer_round(model_wrapper, smiles, initial, ionization_states_in, config, a
                         predicts.append(pred)
                         inf_smiles_list.append(smi_B)
                         centers.append(idx)
-                        # We copy the last state so `parse_smiles` on the next round doesn't crash
                         ion_states_list.append(copy.deepcopy(ionization_states0))
+                        evaluated_in_round.add(idx)
 
     return predicts, inf_smiles_list, centers, ion_states_list
 
@@ -157,34 +170,61 @@ def predict_ladder(model_wrapper, original_smiles, config, allow_amphoteric=Fals
         )
         if not predicts: break
 
-        # Take the highest pKa (the one that stays protonated longest)
-        best_idx = predicts.index(max(predicts))
+        # Macroscopic ladder: start from most protonated state and lose the most acidic proton first
+        best_idx = predicts.index(min(predicts))
+        best_center = centers[best_idx]
+        best_pka = predicts[best_idx]
+        best_smiles = smis[best_idx]
+
+        # Absolute safety break preventing infinite loops (the molecule must change)
+        if best_smiles == curr_smiles:
+            break
 
         all_results.append(LadderStep(
-            smiles=smis[best_idx],
-            center=centers[best_idx],
-            pka=predicts[best_idx]
+            smiles=best_smiles,
+            center=best_center,
+            pka=best_pka
         )
         )
 
         # Prepare for next round
-        curr_smiles = smis[best_idx]
+        curr_smiles = best_smiles
         curr_ion_states = states[best_idx]
         initial = False
-        if predicts[best_idx] < -10: break
+
+        # Stop ladder if the next deprotonation is extremely unfavorable
+        if best_pka > 25:
+            break
 
     return all_results
 
 
 def compute_microstates(model_wrapper, mol, ph=7.4, ph_range=None, ph_step=None) -> MicrostateResult | dict[
     float, MicrostateResult]:
-    original_smiles = Chem.MolToSmiles(mol, canonical=False)
-    ladder = predict_ladder(model_wrapper, original_smiles, config=model_wrapper.config,
-                            allow_amphoteric=model_wrapper.allow_amphoteric
-                            )
-
-    states = [mol] + [Chem.MolFromSmiles(step["smiles"]) for step in ladder]
+    # Run predictions, taking advantage of pre-protonation in predict()
+    ladder = model_wrapper.predict(mol)
     all_pkas = sorted([step["pka"] for step in ladder])
+
+    if ladder:
+        # Recreate the fully protonated starting state
+        mol_clean = Chem.RemoveHs(mol)
+        if model_wrapper.allow_amphoteric:
+            rw_mol = Chem.RWMol(mol_clean)
+            patt = Chem.MolFromSmarts('[#7+0]')
+            if patt:
+                for m in rw_mol.GetSubstructMatches(patt):
+                    atom = rw_mol.GetAtomWithIdx(m[0])
+                    if atom.GetDegree() <= 3:
+                        atom.SetFormalCharge(1)
+                        atom.SetNumExplicitHs(atom.GetNumExplicitHs() + 1)
+            Chem.SanitizeMol(rw_mol, catchErrors=True)
+            start_mol = rw_mol.GetMol()
+        else:
+            start_mol = mol_clean
+
+        states = [start_mol] + [Chem.MolFromSmiles(step["smiles"]) for step in ladder]
+    else:
+        states = [mol]
 
     def get_dist_at_ph(current_ph):
         if not all_pkas:

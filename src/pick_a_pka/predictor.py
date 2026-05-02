@@ -11,7 +11,7 @@ from .backends.pkalearn.model import PkaLearnModel
 class PKaPredictor:
     def __init__(
             self,
-            model: Literal["pkalearn", "molgpka"] | BackendType = BackendType.PKALEARN,
+            model: Literal["molgpka", "pkalearn"] | BackendType = BackendType.MOLGPKA,
             device: str = "cpu",
             allow_amphoteric: bool = False,
     ):
@@ -52,7 +52,7 @@ class PKaPredictor:
             raise InvalidMoleculeError("Input must be an RDKit Mol or a SMILES string.")
         return [mol_or_smiles]
 
-    def predict_pka(self, mol: Chem.Mol | list[Chem.Mol]) -> list[dict[int, float]]:
+    def predict_pka(self, mol: Chem.Mol | list[Chem.Mol] | str | list[str]) -> list[dict[int, float]]:
         """Predict the pKa values for a molecule or a list of molecules.
 
         :param mol: molecule, SMILES, or a list of either
@@ -62,7 +62,8 @@ class PKaPredictor:
         results = [self.model.predict_pka(m) for m in mols]
         return results if isinstance(mol, list) else results[0]
 
-    def predict_microstates(self, mol: Chem.Mol | list[Chem.Mol], ph: float | list[float] = 7.4,
+    def predict_microstates(self, mol: Chem.Mol | list[Chem.Mol] | str | list[str],
+                            ph: float | list[float] = 7.4,
                             ph_range: tuple = None, ph_step: float = None
                             ) -> list[MicrostateResult | dict[float, MicrostateResult]]:
         """Predict the relative abundances of the microstates for a molecule or a list of molecules at a given pH.
@@ -78,4 +79,4 @@ class PKaPredictor:
             self.model.predict_microstates(mol_, ph=ph, ph_range=ph_range, ph_step=ph_step)
             for mol_ in mols
         ]
-        return results
+        return results if isinstance(mol, list) else results[0]

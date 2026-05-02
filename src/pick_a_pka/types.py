@@ -11,6 +11,8 @@ class BackendType(str, Enum):
 
 class LadderStep(TypedDict):
     smiles: str
+    mol_a: Chem.Mol
+    mol_b: Chem.Mol
     center: int
     pka: float
 

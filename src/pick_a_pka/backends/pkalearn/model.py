@@ -63,12 +63,33 @@ class PkaLearnModel(BasePKaModel):
         from .microstates import predict_ladder
 
         if isinstance(mol_or_smiles, str):
-            smiles_str = mol_or_smiles
+            mol = Chem.MolFromSmiles(mol_or_smiles)
         else:
-            # We must use non-canonical SMILES to ensure string index -> RDKit index mapping
-            smiles_str = Chem.MolToSmiles(Chem.RemoveHs(mol_or_smiles), canonical=False)
+            mol = Chem.Mol(mol_or_smiles)
 
-        return predict_ladder(self, smiles_str, self.config)
+        mol_clean = Chem.RemoveHs(mol)
+
+        if self.allow_amphoteric:
+            # Pre-protonate all neutral nitrogens so they enter the ladder at the top
+            rw_mol = Chem.RWMol(mol_clean)
+            patt = Chem.MolFromSmarts('[#7+0]')
+            if patt:
+                for m in rw_mol.GetSubstructMatches(patt):
+                    atom = rw_mol.GetAtomWithIdx(m[0])
+                    # Guard against over-bonding limits
+                    if atom.GetDegree() <= 3:
+                        atom.SetFormalCharge(1)
+                        atom.SetNumExplicitHs(atom.GetNumExplicitHs() + 1)
+            try:
+                Chem.SanitizeMol(rw_mol)
+                mol_clean = rw_mol.GetMol()
+            except Exception:
+                # Fallback to the original cleanly stripped molecule if RDKit rejects
+                mol_clean = Chem.RemoveHs(mol)
+
+        # Using non-canonical SMILES preserves the native node order perfectly
+        smiles_str = Chem.MolToSmiles(mol_clean, canonical=False)
+        return predict_ladder(self, smiles_str, self.config, allow_amphoteric=self.allow_amphoteric)
 
     def predict_pka(self, mol):
         mol_clean = Chem.RemoveHs(mol) if isinstance(mol, Chem.Mol) else Chem.MolFromSmiles(mol)
@@ -78,31 +99,29 @@ class PkaLearnModel(BasePKaModel):
         acid_pka = {}
 
         for step in ladder:
-            idx = step['center']
             pka = step['pka']
-
-            # 100% Foolproof Thermodynamic Rule:
-            # We parse the state of the molecule *after* deprotonation (stable at high pH).
-            # Because pKaLearn uses string slicing, the atom indices are strictly preserved.
             step_mol = Chem.MolFromSmiles(step['smiles'], sanitize=False)
 
-            if step_mol and step_mol.GetNumAtoms() == mol_clean.GetNumAtoms():
-                # Get the formal charge of the target atom in the protonated state
-                fc = step_mol.GetAtomWithIdx(idx).GetFormalCharge()
+            if not step_mol:
+                continue
 
-                # An acid loses a proton from its neutral state to become anionic (< 0).
-                # A base loses a proton from its cationic state to become neutral/less positive (>= 0).
-                if fc <= 0:
-                    acid_pka[idx] = pka
-                else:
-                    base_pka[idx] = pka
+            idx = step['center']
+
+            # Since pKaLearn parses from canonical=False SMILES, indices map 1:1.
+            # Catch unexpected indexing mismatches purely as a safety mechanism
+            if idx >= mol_clean.GetNumAtoms():
+                continue
+
+            # Look at the atom in its DEPROTONATED state
+            fc = step_mol.GetAtomWithIdx(idx).GetFormalCharge()
+
+            # 100% Thermodynamic Rule:
+            # If deprotonation yields an anion (fc < 0), it's an ACIDIC pKa.
+            # If deprotonation yields a neutral species (fc >= 0), it's a BASIC pKa.
+            if fc < 0:
+                acid_pka[idx] = pka
             else:
-                # Absolute fallback in the extremely rare case where SMILES length mismatches
-                sym = mol_clean.GetAtomWithIdx(idx).GetSymbol()
-                if sym in ['O', 'S', 'P', 'C']:
-                    acid_pka[idx] = pka
-                else:
-                    base_pka[idx] = pka
+                base_pka[idx] = pka
 
         return {
             "base_pka": base_pka,

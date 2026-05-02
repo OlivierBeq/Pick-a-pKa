@@ -15,7 +15,7 @@
 *   **Intelligent Featurization**: Automatic conversion from SMILES/molecules to graph tensors.
 *   **Macroscopic Ladders**: (pKaLearn) Iteratively discover sequential pKa values as a molecule deprotonates.
 *   **Microstate Distribution**: Calculate the fractional abundance of species at any given pH.
-*   **Beautiful Visualization**: Generate publication-quality SVG/PNG plots of microspecies distributions and pKa-annotated molecules.
+*   **Beautiful Visualization**: Generate publication-quality SVG/PNG plots of microspecies distributions and pKa-annotated molecules agnostic to the backend in use.
 
 ---
 
@@ -25,6 +25,7 @@
 # Clone the repository
 git clone https://github.com/your-repo/pick-a-pka.git
 cd pick-a-pka
+
 
 # Install dependencies
 pip install -e .
@@ -39,27 +40,26 @@ from pick_a_pka import PKaPredictor
 from rdkit import Chem
 
 # 1. Initialize the predictor (defaults to MolGpKa)
-mdl = PKaPredictor(backend='pkalearn', device='cpu')
+mdl = PKaPredictor(backend='pkalearn', device='cpu', allow_amphoteric=True)
 
 # 2. Predict pKa values
 smiles = "CN1C=C(C2=CC=CC=C21)C3=NC(=NC=C3)NC4=C(C=C(C(=C4)NC(=O)C=C)N(C)CCN(C)C)OC"
 results = mdl.predict_pka(smiles)
 
-# 3. View the deprotonation ladder (pKaLearn specific)
-for site in results:
-    print(f"pKa: {site['pka']:.2f} | Site Index: {site['center']}")
+print(results["base_pka"])
+print(results["acid_pka"])
 ```
 
 ---
 
 ## 🧠 Choosing Your Backend
 
-| Feature | **MolGpKa** | **pKaLearn** |
-| :--- | :--- | :--- |
-| **Primary Strength** | Fast, robust per-atom scan | Iterative macroscopic ladders |
-| **Return Format** | Atom-index dictionary | Sequential list of states |
-| **Best For** | High-throughput screening | Complex polyprotic molecules |
-| **Iterative?** | No (Single round) | Yes (Recursive) |
+| Feature              | **MolGpKa**                | **pKaLearn**                              |
+|:---------------------|:---------------------------|:------------------------------------------|
+| **Primary Strength** | Fast, robust per-atom scan | Iterative macroscopic ladders             |
+| **Return Format**    | Atom-index dictionary      | Atom-index dictionary / Sequential states |
+| **Best For**         | High-throughput screening  | Complex polyprotic molecules              |
+| **Iterative?**       | No (Single round)          | Yes (Recursive)                           |
 
 ---
 
@@ -79,31 +79,34 @@ ladder = mdl.predict_pka("OC(=O)c1ccccc1NC(=O)c1ccc(c2ccccc2)cc1")
 ### 2. Microstate Abundance at specific pH
 Determine the dominant protonation state of a drug-like molecule at physiological pH (7.4).
 
-```python
-mdl = PKaPredictor(backend='resources')
-micro = mdl.predict_microstates("CC(=O)O", pH=7.4)
 
-print(f"Dominant pKa: {micro['pka']}")
+```python
+mdl = PKaPredictor(backend='pkalearn', allow_amphoteric=True)
+micro = mdl.predict_microstates("CC(=O)O", ph=7.4)
+
+print(f"Dominant Species Abundance: {micro['major_abundance']}%")
 # Access the RDKit molecule of the major species
-major_mol = micro['major_state'] 
+major_mol = micro['major_state']
 ```
 
 ---
 
 ## 📊 Visualization
 
-Pick-a-pka includes a powerful drawing engine to visualize how a molecule’s ionization changes across the pH scale.
-
+Pick-a-pka includes a powerful backend-agnostic drawing engine to visualize how a molecule’s ionization changes across the pH scale.
 ### Microspecies Distribution Plot
 Generate a plot showing the distribution of all ionization states from pH 0 to 14.
 
 ```python
-from pick_a_pka.backends.molgpka import plot_microspecies_distribution
+from pick_a_pka import plot_microspecies_distribution
+from pick_a_pka import PKaPredictor
 from rdkit import Chem
 
 mol = Chem.MolFromSmiles("c1ccc(C(C(=O)O)N)cc1")
+predictor = PKaPredictor(backend='pkalearn', allow_amphoteric=True)
+
 # Returns a PIL Image or SVG string
-img = plot_microspecies_distribution(mol, vector=False)
+img = plot_microspecies_distribution(mol, model=predictor, vector=False)
 img.show()
 ```
 
@@ -111,9 +114,9 @@ img.show()
 Draw the molecule with predicted pKa values callouts.
 
 ```python
-from pick_a_pka.backends.molgpka import draw_pka
+from pick_a_pka import draw_pka
 
-svg_text = draw_pka(mol, vector=True)
+svg_text = draw_pka(mol, model=predictor, vector=True)
 ```
 
 ---
@@ -121,7 +124,6 @@ svg_text = draw_pka(mol, vector=True)
 ## 📖 Citation
 
 If you use the pKaLearn backend in your research, please cite:
-
 > **Development of a pKa predictor (pKaLearn) by leveraging teaching experience to improve machine learning**,
 > Jérôme Genzling, Ziling Luo, Benjamin Weiser & Nicolas Moitessier,
 > *Communications Chemistry*, **2026**,
@@ -139,4 +141,4 @@ If you use the MolGpKa backend, please cite:
 
 ## ⚖️ License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See `LICENSE.md` for more information.

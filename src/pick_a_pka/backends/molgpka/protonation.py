@@ -113,7 +113,7 @@ def compute_microstates(model, mol, ph=7.4, ph_range=None, ph_step=None) -> Micr
                 major_abundance=major["abundance"],
                 distribution=dist
             )
-            return results
+        return results
 
     dist = []
     for frac, state_mol in raw_results.items():
