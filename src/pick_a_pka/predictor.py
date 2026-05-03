@@ -4,11 +4,12 @@ from rdkit import Chem
 
 from .backends.molgpka.model import MolGpKaModel
 from .backends.pkalearn.model import PkaLearnModel
+from .core.base import BasePKaModel
 from .core.exceptions import InvalidBackendError
 from .core.types import BackendType, MicrostateResult
 
 
-class PKaPredictor:
+class PKaPredictor(BasePKaModel):
     def __init__(
             self,
             model: Literal["molgpka", "pkalearn"] | BackendType = BackendType.MOLGPKA,
@@ -21,7 +22,7 @@ class PKaPredictor:
             raise InvalidBackendError(
                 f"Unknown backend: '{model}'. Choose from: {[b.value for b in BackendType]}"
             )
-        self.device = device
+        super().__init__(device=device)
         self.allow_amphoteric = allow_amphoteric
         if self.model_name == BackendType.MOLGPKA:
             self.model = MolGpKaModel(device=self.device)
@@ -34,23 +35,6 @@ class PKaPredictor:
         # GPU cleanup
         if hasattr(self, "model") and hasattr(self.model, "dispose"):
             self.model.dispose()
-
-    def _to_mol(self, mol_or_smiles: Chem.Mol | str | list[Chem.Mol] | list[str]) -> list[Chem.Mol]:
-        """Parse a molecule or list of molecules.
-
-        :param mol_or_smiles: molecule, SMILES, or a list of either
-        :return: a list of RDKit molecule object(s)
-        """
-        if isinstance(mol_or_smiles, list):
-            return [mol for item in mol_or_smiles for mol in self._to_mol(item)]
-        if isinstance(mol_or_smiles, str):
-            mol = Chem.MolFromSmiles(mol_or_smiles)
-            if mol is None:
-                raise InvalidMoleculeError(f"Invalid SMILES string: {mol_or_smiles}")
-            return [mol]
-        if not isinstance(mol_or_smiles, Chem.Mol):
-            raise InvalidMoleculeError("Input must be an RDKit Mol or a SMILES string.")
-        return [mol_or_smiles]
 
     def predict_pka(self, mol: Chem.Mol | list[Chem.Mol] | str | list[str]) -> list[dict[int, float]]:
         """Predict the pKa values for a molecule or a list of molecules.
