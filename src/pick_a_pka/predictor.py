@@ -2,10 +2,10 @@ from typing import Literal
 
 from rdkit import Chem
 
-from .types import BackendType, MicrostateResult
-from .exceptions import InvalidBackendError, InvalidMoleculeError
 from .backends.molgpka.model import MolGpKaModel
 from .backends.pkalearn.model import PkaLearnModel
+from .core.exceptions import InvalidBackendError
+from .core.types import BackendType, MicrostateResult
 
 
 class PKaPredictor:

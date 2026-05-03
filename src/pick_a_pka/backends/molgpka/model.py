@@ -5,11 +5,11 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 
-from pick_a_pka.core.base import BasePKaModel
+from ...core.base import BasePKaModel
 from .featurizer import mol_to_graph, get_ionization_aid
 from .network import MolGpKaNet
 from .protonation import compute_microstates
-from ...exceptions import ResourceNotFoundError
+from ...core.exceptions import ResourceNotFoundError
 
 
 class MolGpKaModel(BasePKaModel):

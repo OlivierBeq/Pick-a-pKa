@@ -7,7 +7,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from torch_geometric.data import Data
 
-from ...exceptions import InvalidMoleculeError
+from ...core.exceptions import InvalidMoleculeError
 
 
 def one_hot(x, allowable_set):

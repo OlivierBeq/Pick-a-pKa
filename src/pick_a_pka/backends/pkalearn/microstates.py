@@ -7,7 +7,7 @@ from rdkit import Chem
 from .change_ionization import parse_smiles, find_centers, addHs, ionizeN
 from .featurizer import mol_to_graph
 from .inference import predict_single
-from ...types import LadderStep, MicrostateResult, StateDistribution
+from ...core.types import LadderStep, MicrostateResult, StateDistribution
 
 
 class DummyArgs:

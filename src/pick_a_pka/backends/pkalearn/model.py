@@ -5,7 +5,7 @@ from rdkit import Chem
 
 from .network import PkaLearnGNN
 from ...core.base import BasePKaModel
-from ...exceptions import ResourceNotFoundError
+from ...core.exceptions import ResourceNotFoundError
 
 
 class PkaLearnModel(BasePKaModel):

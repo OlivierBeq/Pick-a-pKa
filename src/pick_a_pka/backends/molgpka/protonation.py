@@ -5,7 +5,7 @@ from itertools import combinations
 import numpy as np
 from rdkit import Chem
 
-from ...types import MicrostateResult, StateDistribution
+from ...core.types import MicrostateResult, StateDistribution
 
 
 def _generate_microspecies_sequence(mol_no_hs, base_pka_dict, acid_pka_dict):

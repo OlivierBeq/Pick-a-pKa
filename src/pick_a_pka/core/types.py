@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import TypedDict, Dict, List, Any
+from typing import TypedDict
 
 from rdkit import Chem
 
@@ -21,7 +21,6 @@ class StateDistribution(TypedDict):
     smiles: str
     mol: Chem.Mol
     abundance: float
-
 
 
 class MicrostateResult(TypedDict):
